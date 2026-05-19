@@ -106,7 +106,8 @@ export default function MisAutosPage() {
     })
 
     if (err) {
-      setError('No se pudo guardar el auto. Revisá los datos.')
+      console.error('Error autos:', err)
+      setError(`Error: ${err.message} (código: ${err.code})`)
       setSaving(false)
       return
     }
