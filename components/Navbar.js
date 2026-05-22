@@ -9,6 +9,7 @@ export default function Navbar() {
   const [profile, setProfile] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [reservasPendientes, setReservasPendientes] = useState(0)
   const menuRef = useRef(null)
   const router = useRouter()
 
@@ -36,6 +37,22 @@ export default function Navbar() {
   const fetchProfile = async (userId) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
     setProfile(data)
+    fetchPendientes(userId)
+  }
+
+  const fetchPendientes = async (userId) => {
+    const { data: viajes } = await supabase
+      .from('viajes')
+      .select('id')
+      .eq('conductor_id', userId)
+    if (!viajes || viajes.length === 0) return
+    const viajeIds = viajes.map(v => v.id)
+    const { count } = await supabase
+      .from('reservas')
+      .select('id', { count: 'exact', head: true })
+      .in('viaje_id', viajeIds)
+      .eq('estado', 'pendiente')
+    setReservasPendientes(count || 0)
   }
 
   const handleLogout = async () => {
@@ -103,17 +120,23 @@ export default function Navbar() {
                   </div>
                   {[
                     { href: '/perfil', label: 'Mi perfil' },
-                    { href: '/mis-viajes', label: 'Mis viajes' },
+                    { href: '/mis-viajes', label: 'Mis viajes', badge: reservasPendientes },
                     { href: '/mis-autos', label: 'Mis autos 🚗' },
                     { href: '/mensajes', label: 'Mensajes 💬' },
                     { href: '/configuracion', label: 'Configuración' },
-                  ].map(({ href, label }) => (
+                  ].map(({ href, label, badge }) => (
                     <Link key={href} href={href} onClick={() => setUserMenuOpen(false)} style={{
-                      display: 'block', padding: '11px 16px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '11px 16px',
                       fontSize: '13px', color: 'var(--dark)', textDecoration: 'none',
                       fontWeight: 500, borderBottom: '1px solid var(--border)'
                     }}>
                       {label}
+                      {badge > 0 && (
+                        <span style={{ fontSize: '11px', fontWeight: 700, background: '#dc2626', color: '#fff', borderRadius: '20px', padding: '2px 7px', minWidth: '18px', textAlign: 'center' }}>
+                          {badge}
+                        </span>
+                      )}
                     </Link>
                   ))}
                   <button onClick={handleLogout} style={{

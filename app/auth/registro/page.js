@@ -22,7 +22,7 @@ export default function RegistroPage() {
     })
 
     if (signUpError) {
-      setError('No se pudo crear la cuenta. Revisá los datos e intentá de nuevo.')
+      setError(`Error: ${signUpError.message}`)
       setLoading(false)
       return
     }
