@@ -16,12 +16,25 @@ export default function MisViajesPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) router.push('/auth/login')
-      else { setUser(user); fetchTodo(user.id) }
+      else {
+        setUser(user)
+        fetchTodo(user.id)
+
+        // Escuchar cambios en reservas en tiempo real
+        const channel = supabase
+          .channel('reservas-cambios')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas' }, () => {
+            fetchTodo(user.id)
+          })
+          .subscribe()
+
+        return () => supabase.removeChannel(channel)
+      }
     })
   }, [])
 
-  const fetchTodo = async (uid) => {
-    setLoading(true)
+  const fetchTodo = async (uid, showLoading = true) => {
+    if (showLoading) setLoading(true)
 
     const [{ data: viajes }, { data: reservasPasajero }] = await Promise.all([
       supabase
@@ -41,10 +54,18 @@ export default function MisViajesPage() {
     setLoading(false)
   }
 
-  const responderReserva = async (reservaId, nuevoEstado) => {
+  const responderReserva = async (reservaId, nuevoEstado, uid) => {
     setAccionando(reservaId)
-    await supabase.from('reservas').update({ estado: nuevoEstado }).eq('id', reservaId)
-    if (user) fetchTodo(user.id)
+    const { error } = await supabase
+      .from('reservas')
+      .update({ estado: nuevoEstado })
+      .eq('id', reservaId)
+    if (error) {
+      console.error('Error al actualizar reserva:', error)
+      alert(`Error: ${error.message}`)
+    } else {
+      fetchTodo(uid, false)
+    }
     setAccionando(null)
   }
 
@@ -146,13 +167,13 @@ export default function MisViajesPage() {
                           </div>
                           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                             <button
-                              onClick={() => responderReserva(reserva.id, 'rechazada')}
+                              onClick={() => responderReserva(reserva.id, 'rechazada', user.id)}
                               disabled={accionando === reserva.id}
                               style={{ padding: '7px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: '1px solid var(--border-md)', background: 'transparent', color: '#b91c1c', cursor: 'pointer', opacity: accionando === reserva.id ? 0.5 : 1 }}>
                               Rechazar
                             </button>
                             <button
-                              onClick={() => responderReserva(reserva.id, 'aceptada')}
+                              onClick={() => responderReserva(reserva.id, 'aceptada', user.id)}
                               disabled={accionando === reserva.id}
                               className="btn-primary"
                               style={{ padding: '7px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', opacity: accionando === reserva.id ? 0.5 : 1 }}>
