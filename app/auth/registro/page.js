@@ -27,6 +27,13 @@ export default function RegistroPage() {
       return
     }
 
+    // Si el email ya está registrado, Supabase devuelve user con identities vacío
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setError('Este email ya está registrado. ¿Querés iniciar sesión?')
+      setLoading(false)
+      return
+    }
+
     // Crear perfil del usuario
     if (data.user) {
       await supabase.from('profiles').insert({
