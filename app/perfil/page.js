@@ -158,11 +158,14 @@ export default function PerfilPage() {
               <label className="label">Nombre completo</label>
               <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })}
                 placeholder="Tu nombre" className="input-field" />
+              <p style={{ fontSize: '12px', color: 'var(--subtle)', margin: '5px 0 0' }}>
+                📋 Debe coincidir exactamente con tu DNI. Se verificará al activar tu cuenta.
+              </p>
             </div>
             <div>
               <label className="label">Género</label>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                {['Masculino', 'Femenino', 'No binario', 'Prefiero no decir'].map(g => (
+                {['Masculino', 'Femenino'].map(g => (
                   <button key={g} type="button" onClick={() => setForm({ ...form, genero: g })}
                     style={{
                       padding: '7px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 500,
@@ -173,6 +176,9 @@ export default function PerfilPage() {
                     }}>{g}</button>
                 ))}
               </div>
+              <p style={{ fontSize: '12px', color: 'var(--subtle)', margin: '5px 0 0' }}>
+                📋 Tal como figura en tu DNI.
+              </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
