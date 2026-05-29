@@ -93,14 +93,21 @@ export default function Navbar() {
                 border: '1px solid var(--border-md)', borderRadius: '10px',
                 padding: '6px 12px 6px 6px', cursor: 'pointer'
               }}>
-                <div style={{
-                  width: '28px', height: '28px', borderRadius: '50%',
-                  background: 'var(--navy)', color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '11px', fontWeight: 700, flexShrink: 0
-                }}>
-                  {initials}
-                </div>
+                {profile?.foto_url ? (
+                  <img src={profile.foto_url} alt="foto" style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    objectFit: 'cover', flexShrink: 0
+                  }} />
+                ) : (
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: 'var(--navy)', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '11px', fontWeight: 700, flexShrink: 0
+                  }}>
+                    {initials}
+                  </div>
+                )}
                 <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dark)' }}>
                   {profile?.nombre?.split(' ')[0] ?? 'Mi cuenta'}
                 </span>
