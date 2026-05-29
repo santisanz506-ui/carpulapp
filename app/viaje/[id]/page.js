@@ -14,6 +14,7 @@ export default function ViajeDetallePage() {
   const [paso, setPaso] = useState('pago')
   const [pagando, setPagando] = useState(false)
   const [yaReservo, setYaReservo] = useState(false)
+  const [asientosReserva, setAsientosReserva] = useState(1)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -59,6 +60,7 @@ export default function ViajeDetallePage() {
       viaje_id: viaje.id,
       pasajero_id: user.id,
       estado: 'pendiente',
+      asientos: asientosReserva,
     })
     if (!error) { setYaReservo(true); setPaso('exito') }
     setPagando(false)
@@ -211,9 +213,19 @@ export default function ViajeDetallePage() {
                     <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Conductor</span>
                     <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dark)' }}>{viaje.conductor?.nombre}</span>
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Asientos</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <button type="button" onClick={() => setAsientosReserva(a => Math.max(1, a - 1))}
+                        style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--border-md)', background: 'transparent', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                      <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dark)', minWidth: '16px', textAlign: 'center' }}>{asientosReserva}</span>
+                      <button type="button" onClick={() => setAsientosReserva(a => Math.min(viaje.asientos_disponibles, a + 1))}
+                        style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--border-md)', background: 'transparent', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                    </div>
+                  </div>
                   <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dark)' }}>Total</span>
-                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--dark)' }}>${Number(viaje.precio).toLocaleString('es-AR')}</span>
+                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--dark)' }}>${(Number(viaje.precio) * asientosReserva).toLocaleString('es-AR')}</span>
                   </div>
                 </div>
                 <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px' }}>Método de pago</p>
@@ -229,7 +241,7 @@ export default function ViajeDetallePage() {
                 </div>
                 <button onClick={handlePagar} disabled={pagando} className="btn-primary"
                   style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', fontWeight: 600, opacity: pagando ? 0.7 : 1 }}>
-                  {pagando ? 'Procesando...' : 'Pagar $' + Number(viaje.precio).toLocaleString('es-AR')}
+                  {pagando ? 'Procesando...' : 'Pagar $' + (Number(viaje.precio) * asientosReserva).toLocaleString('es-AR')}
                 </button>
                 <p style={{ fontSize: '12px', color: 'var(--subtle)', textAlign: 'center', margin: '12px 0 0' }}>
                   La reserva queda pendiente hasta que el conductor confirme.

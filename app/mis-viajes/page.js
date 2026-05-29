@@ -54,16 +54,19 @@ export default function MisViajesPage() {
     setLoading(false)
   }
 
-  const responderReserva = async (reservaId, nuevoEstado, uid) => {
+  const responderReserva = async (reservaId, nuevoEstado, uid, viajeId) => {
     setAccionando(reservaId)
     const { error } = await supabase
       .from('reservas')
       .update({ estado: nuevoEstado })
       .eq('id', reservaId)
     if (error) {
-      console.error('Error al actualizar reserva:', error)
       alert(`Error: ${error.message}`)
     } else {
+      // Si acepta, decrementar asientos disponibles
+      if (nuevoEstado === 'aceptada') {
+        await supabase.rpc('decrementar_asientos', { viaje_id_param: viajeId })
+      }
       fetchTodo(uid, false)
     }
     setAccionando(null)
@@ -167,13 +170,13 @@ export default function MisViajesPage() {
                           </div>
                           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                             <button
-                              onClick={() => responderReserva(reserva.id, 'rechazada', user.id)}
+                              onClick={() => responderReserva(reserva.id, 'rechazada', user.id, viaje.id)}
                               disabled={accionando === reserva.id}
                               style={{ padding: '7px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: '1px solid var(--border-md)', background: 'transparent', color: '#b91c1c', cursor: 'pointer', opacity: accionando === reserva.id ? 0.5 : 1 }}>
                               Rechazar
                             </button>
                             <button
-                              onClick={() => responderReserva(reserva.id, 'aceptada', user.id)}
+                              onClick={() => responderReserva(reserva.id, 'aceptada', user.id, viaje.id)}
                               disabled={accionando === reserva.id}
                               className="btn-primary"
                               style={{ padding: '7px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', opacity: accionando === reserva.id ? 0.5 : 1 }}>

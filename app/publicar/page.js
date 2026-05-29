@@ -14,7 +14,7 @@ export default function PublicarPage() {
   const [loadingAutos, setLoadingAutos] = useState(true)
   const [form, setForm] = useState({
     origen: '', destino: '', fecha: '', hora: '',
-    asientos: 1, precio: '', punto_encuentro: '', descripcion: '', auto_id: ''
+    asientos: 3, precio: '', punto_encuentro: '', descripcion: '', auto_id: ''
   })
 
   useEffect(() => {
@@ -176,7 +176,7 @@ export default function PublicarPage() {
             <div>
               <label className="label">Asientos disponibles</label>
               <select value={form.asientos} onChange={e => setForm({ ...form, asientos: e.target.value })} className="input-field">
-                {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n} {n === 1 ? 'lugar' : 'lugares'}</option>)}
+                {[1, 2, 3].map(n => <option key={n} value={n}>{n} {n === 1 ? 'lugar' : 'lugares'}</option>)}
               </select>
             </div>
             <div>
