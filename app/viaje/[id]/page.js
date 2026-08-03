@@ -55,15 +55,30 @@ export default function ViajeDetallePage() {
 
   const handlePagar = async () => {
     setPagando(true)
-    await new Promise(r => setTimeout(r, 1800))
-    const { error } = await supabase.from('reservas').insert({
-      viaje_id: viaje.id,
-      pasajero_id: user.id,
-      estado: 'pendiente',
-      asientos: asientosReserva,
-    })
-    if (!error) { setYaReservo(true); setPaso('exito') }
-    setPagando(false)
+    try {
+      const res = await fetch('/api/crear-preferencia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          viajeId: viaje.id,
+          origen: viaje.origen,
+          destino: viaje.destino,
+          precio: viaje.precio,
+          asientos: asientosReserva,
+          pasajeroId: user.id,
+        })
+      })
+      const data = await res.json()
+      if (data.sandbox_init_point) {
+        window.location.href = data.sandbox_init_point
+      } else {
+        alert('Error al crear el pago: ' + (data.error || 'intenta de nuevo'))
+        setPagando(false)
+      }
+    } catch (err) {
+      alert('Error: ' + err.message)
+      setPagando(false)
+    }
   }
 
   const formatFecha = (f) => {
