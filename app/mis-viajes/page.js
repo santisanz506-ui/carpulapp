@@ -65,7 +65,8 @@ export default function MisViajesPage() {
     } else {
       // Si acepta, decrementar la cantidad de asientos que pidió esta reserva (no siempre 1)
       if (nuevoEstado === 'aceptada') {
-        await supabase.rpc('decrementar_asientos', { viaje_id_param: viajeId, asientos_param: asientosReserva || 1 })
+        const { error: rpcError } = await supabase.rpc('decrementar_asientos', { viaje_id_param: viajeId, asientos_param: asientosReserva || 1 })
+        if (rpcError) alert(`No se pudieron descontar los asientos: ${rpcError.message}`)
       }
       fetchTodo(uid, false)
     }

@@ -128,7 +128,8 @@ function MensajesContenido() {
       alert(`Error: ${error.message}`)
     } else {
       if (nuevoEstado === 'aceptada') {
-        await supabase.rpc('decrementar_asientos', { viaje_id_param: reservaActiva.viaje_id, asientos_param: reservaActiva.asientos || 1 })
+        const { error: rpcError } = await supabase.rpc('decrementar_asientos', { viaje_id_param: reservaActiva.viaje_id, asientos_param: reservaActiva.asientos || 1 })
+        if (rpcError) alert(`No se pudieron descontar los asientos: ${rpcError.message}`)
       }
       await supabase.from('mensajes').insert({
         reserva_id: reservaActiva.id,
