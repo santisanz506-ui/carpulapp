@@ -39,7 +39,7 @@ export default function ViajeDetallePage() {
         .select('id')
         .eq('viaje_id', id)
         .eq('pasajero_id', uid)
-        .neq('estado', 'rechazada')
+        .in('estado', ['pendiente', 'aceptada'])
         .maybeSingle()
       if (reserva) setYaReservo(true)
     }

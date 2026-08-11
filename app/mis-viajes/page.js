@@ -4,6 +4,52 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import Link from 'next/link'
 
+function ListaLugares({ viaje, aceptadas, modoConductor, miReservaId, onAccion, accionando }) {
+  const libres = viaje.asientos_disponibles || 0
+  const totalCapacidad = libres + aceptadas.reduce((sum, r) => sum + (r.asientos || 1), 0)
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px' }}>
+      <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>
+        Lugares · {totalCapacidad - libres}/{totalCapacidad} ocupados
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {aceptadas.map(r => (
+          <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '6px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--navy)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
+                {r.pasajero?.nombre?.[0]?.toUpperCase() || '?'}
+              </div>
+              <p style={{ fontSize: '13.5px', fontWeight: 500, color: 'var(--dark)', margin: 0 }}>
+                {r.pasajero?.nombre || 'Pasajero'}{r.asientos > 1 ? ` · ${r.asientos} asientos` : ''}
+                {!modoConductor && r.id === miReservaId ? ' (vos)' : ''}
+              </p>
+            </div>
+            {modoConductor && (
+              <button onClick={() => onAccion(r)} disabled={accionando === r.id}
+                style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 600, borderRadius: '7px', border: '1px solid var(--border-md)', background: 'transparent', color: '#b91c1c', cursor: 'pointer', opacity: accionando === r.id ? 0.5 : 1 }}>
+                Echar
+              </button>
+            )}
+            {!modoConductor && r.id === miReservaId && (
+              <button onClick={() => onAccion(r)} disabled={accionando === r.id}
+                style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 600, borderRadius: '7px', border: '1px solid var(--border-md)', background: 'transparent', color: '#b91c1c', cursor: 'pointer', opacity: accionando === r.id ? 0.5 : 1 }}>
+                Darme de baja
+              </button>
+            )}
+          </div>
+        ))}
+        {Array.from({ length: libres }).map((_, i) => (
+          <div key={`libre-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 0', opacity: 0.5 }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1.5px dashed var(--border-md)', flexShrink: 0 }} />
+            <p style={{ fontSize: '13.5px', color: 'var(--muted)', margin: 0, fontStyle: 'italic' }}>Lugar disponible</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function MisViajesPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -44,7 +90,14 @@ export default function MisViajesPage() {
         .order('fecha', { ascending: false }),
       supabase
         .from('reservas')
-        .select('*, viaje:viajes(origen, destino, fecha, hora_salida, precio, conductor:profiles!viajes_conductor_id_fkey(nombre, rating))')
+        .select(`
+          *,
+          viaje:viajes(
+            origen, destino, fecha, hora_salida, precio, asientos_disponibles,
+            conductor:profiles!viajes_conductor_id_fkey(nombre, rating),
+            reservas(id, estado, asientos, pasajero:profiles!reservas_pasajero_id_fkey(nombre))
+          )
+        `)
         .eq('pasajero_id', uid)
         .order('created_at', { ascending: false })
     ])
@@ -73,6 +126,31 @@ export default function MisViajesPage() {
     setAccionando(null)
   }
 
+  const liberarLugar = async (reservaId, viajeId, asientos, mensajeConfirm) => {
+    if (!confirm(mensajeConfirm)) return
+    setAccionando(reservaId)
+    const { error } = await supabase
+      .from('reservas')
+      .update({ estado: 'cancelada' })
+      .eq('id', reservaId)
+    if (error) {
+      alert(`Error: ${error.message}`)
+    } else {
+      const { error: rpcError } = await supabase.rpc('incrementar_asientos', { viaje_id_param: viajeId, asientos_param: asientos || 1 })
+      if (rpcError) alert(`No se pudo liberar el lugar: ${rpcError.message}`)
+      fetchTodo(user.id, false)
+    }
+    setAccionando(null)
+  }
+
+  const echarPasajero = (reserva, viajeId) => {
+    liberarLugar(reserva.id, viajeId, reserva.asientos, '¿Seguro que querés sacar a este pasajero del viaje? Se le libera el lugar a otra persona.')
+  }
+
+  const cancelarMiReserva = (reserva, viajeId) => {
+    liberarLugar(reserva.id, viajeId, reserva.asientos, '¿Seguro que te querés dar de baja de este viaje?')
+  }
+
   const formatFecha = (f) => {
     if (!f) return ''
     const [y, m, d] = f.split('-')
@@ -85,6 +163,7 @@ export default function MisViajesPage() {
       pendiente:  { bg: 'rgba(234,179,8,0.1)',  color: '#854d0e', label: 'Pendiente' },
       aceptada:   { bg: 'rgba(46,139,87,0.1)',  color: 'var(--trust)', label: 'Aceptada' },
       rechazada:  { bg: 'rgba(220,38,38,0.08)', color: '#b91c1c', label: 'Rechazada' },
+      cancelada:  { bg: 'rgba(107,114,128,0.1)', color: '#6b7280', label: 'Cancelada' },
     }
     const e = estilos[estado] || estilos.pendiente
     return (
@@ -134,7 +213,7 @@ export default function MisViajesPage() {
               const aceptadas = viaje.reservas?.filter(r => r.estado === 'aceptada') || []
               return (
                 <div key={viaje.id} className="card" style={{ padding: '22px 24px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: pendientes.length > 0 ? '16px' : '0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--dark)', margin: '0 0 4px' }}>
                         {viaje.origen} → {viaje.destino}
@@ -154,7 +233,7 @@ export default function MisViajesPage() {
                   </div>
 
                   {pendientes.length > 0 && (
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: 0 }}>
                         Solicitudes pendientes
                       </p>
@@ -192,6 +271,14 @@ export default function MisViajesPage() {
                       ))}
                     </div>
                   )}
+
+                  <ListaLugares
+                    viaje={viaje}
+                    aceptadas={aceptadas}
+                    modoConductor={true}
+                    onAccion={(r) => echarPasajero(r, viaje.id)}
+                    accionando={accionando}
+                  />
                 </div>
               )
             })}
@@ -207,30 +294,46 @@ export default function MisViajesPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {viajesComoPasajero.map(reserva => (
-              <div key={reserva.id} className="card" style={{ padding: '22px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-                <div>
-                  <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--dark)', margin: '0 0 4px' }}>
-                    {reserva.viaje?.origen} → {reserva.viaje?.destino}
-                  </p>
-                  <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '0 0 6px' }}>
-                    {formatFecha(reserva.viaje?.fecha)} · {reserva.viaje?.hora_salida?.slice(0,5)} · con {reserva.viaje?.conductor?.nombre}
-                  </p>
-                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dark)', margin: 0 }}>
-                    ${Number(reserva.viaje?.precio).toLocaleString('es-AR')}
-                  </p>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
-                  {estadoBadge(reserva.estado)}
-                  {reserva.estado !== 'rechazada' && (
-                    <Link href={`/mensajes?reserva=${reserva.id}`}
-                      style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--navy)', textDecoration: 'none' }}>
-                      💬 Chatear
-                    </Link>
+            {viajesComoPasajero.map(reserva => {
+              const aceptadasDelViaje = reserva.viaje?.reservas?.filter(r => r.estado === 'aceptada') || []
+              return (
+                <div key={reserva.id} className="card" style={{ padding: '22px 24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                    <div>
+                      <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--dark)', margin: '0 0 4px' }}>
+                        {reserva.viaje?.origen} → {reserva.viaje?.destino}
+                      </p>
+                      <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '0 0 6px' }}>
+                        {formatFecha(reserva.viaje?.fecha)} · {reserva.viaje?.hora_salida?.slice(0,5)} · con {reserva.viaje?.conductor?.nombre}
+                      </p>
+                      <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dark)', margin: 0 }}>
+                        ${Number(reserva.viaje?.precio).toLocaleString('es-AR')}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                      {estadoBadge(reserva.estado)}
+                      {reserva.estado !== 'rechazada' && (
+                        <Link href={`/mensajes?reserva=${reserva.id}`}
+                          style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--navy)', textDecoration: 'none' }}>
+                          💬 Chatear
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  {reserva.estado === 'aceptada' && reserva.viaje && (
+                    <ListaLugares
+                      viaje={reserva.viaje}
+                      aceptadas={aceptadasDelViaje}
+                      modoConductor={false}
+                      miReservaId={reserva.id}
+                      onAccion={(r) => cancelarMiReserva(r, reserva.viaje_id)}
+                      accionando={accionando}
+                    />
                   )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )
       )}

@@ -43,7 +43,7 @@ function MensajesContenido() {
           pasajero:profiles!reservas_pasajero_id_fkey(id, nombre, foto_url)
         `)
         .eq('viaje.conductor_id', uid)
-        .in('estado', ['pendiente', 'aceptada', 'rechazada']),
+        .in('estado', ['pendiente', 'aceptada', 'rechazada', 'cancelada']),
       supabase
         .from('reservas')
         .select(`
@@ -52,7 +52,7 @@ function MensajesContenido() {
           pasajero:profiles!reservas_pasajero_id_fkey(id, nombre, foto_url)
         `)
         .eq('pasajero_id', uid)
-        .in('estado', ['pendiente', 'aceptada', 'rechazada'])
+        .in('estado', ['pendiente', 'aceptada', 'rechazada', 'cancelada'])
     ])
 
     const filas = [
@@ -160,6 +160,7 @@ function MensajesContenido() {
       pendiente: { bg: 'rgba(234,179,8,0.12)', color: '#854d0e', label: 'Pendiente' },
       aceptada:  { bg: 'rgba(46,139,87,0.1)',  color: 'var(--trust)', label: 'Aceptada' },
       rechazada: { bg: 'rgba(220,38,38,0.08)', color: '#b91c1c', label: 'Rechazada' },
+      cancelada: { bg: 'rgba(107,114,128,0.1)', color: '#6b7280', label: 'Cancelada' },
     }
     const e = estilos[estado] || estilos.pendiente
     return (
