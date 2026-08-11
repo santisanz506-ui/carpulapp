@@ -73,11 +73,12 @@ export default function ViajeDetallePage() {
       }
 
       if (mensajeInicial.trim()) {
-        await supabase.from('mensajes').insert({
+        const { error: msgError } = await supabase.from('mensajes').insert({
           reserva_id: reserva.id,
           sender_id: user.id,
           texto: mensajeInicial.trim(),
         })
+        if (msgError) console.error('No se pudo enviar el mensaje inicial:', msgError.message)
       }
 
       router.push(`/mensajes?reserva=${reserva.id}`)
