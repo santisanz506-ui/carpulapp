@@ -17,6 +17,7 @@ function MensajesContenido() {
   const [texto, setTexto] = useState('')
   const [loading, setLoading] = useState(true)
   const [enviando, setEnviando] = useState(false)
+  const [respondiendo, setRespondiendo] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -30,28 +31,49 @@ function MensajesContenido() {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' })
   }, [mensajes])
 
-  const fetchConversaciones = async (uid) => {
-    // Traer todas las reservas aceptadas donde el user es conductor o pasajero
-    const { data } = await supabase
-      .from('reservas')
-      .select(`
-        *,
-        viaje:viajes(origen, destino, fecha, hora_salida),
-        pasajero:profiles!reservas_pasajero_id_fkey(nombre, foto_url),
-        conductor:viajes(conductor:profiles!viajes_conductor_id_fkey(nombre, foto_url))
-      `)
-      .eq('estado', 'aceptada')
-      .or(`pasajero_id.eq.${uid},viaje.conductor_id.eq.${uid}`)
-      .order('created_at', { ascending: false })
+  const fetchConversaciones = async (uid, mantenerActiva = false) => {
+    // Traer todas las reservas (pendientes o aceptadas) donde el user es conductor o pasajero.
+    // El chat se abre apenas se envía la solicitud, no hace falta esperar a que se acepte.
+    const [{ data: comoConductor }, { data: comoPasajero }] = await Promise.all([
+      supabase
+        .from('reservas')
+        .select(`
+          *,
+          viaje:viajes!inner(origen, destino, fecha, hora_salida, conductor_id),
+          pasajero:profiles!reservas_pasajero_id_fkey(id, nombre, foto_url)
+        `)
+        .eq('viaje.conductor_id', uid)
+        .in('estado', ['pendiente', 'aceptada', 'rechazada']),
+      supabase
+        .from('reservas')
+        .select(`
+          *,
+          viaje:viajes(origen, destino, fecha, hora_salida, conductor_id, conductor:profiles!viajes_conductor_id_fkey(id, nombre, foto_url)),
+          pasajero:profiles!reservas_pasajero_id_fkey(id, nombre, foto_url)
+        `)
+        .eq('pasajero_id', uid)
+        .in('estado', ['pendiente', 'aceptada', 'rechazada'])
+    ])
 
-    setReservas(data || [])
+    const filas = [
+      ...(comoConductor || []).map(r => ({ ...r, _esConductor: true })),
+      ...(comoPasajero || []).map(r => ({ ...r, _esConductor: false })),
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+    setReservas(filas)
     setLoading(false)
 
-    if (reservaIdParam && data) {
-      const r = data.find(r => r.id === reservaIdParam)
+    if (reservaIdParam && filas.length) {
+      const r = filas.find(r => r.id === reservaIdParam)
       if (r) seleccionarReserva(r, uid)
-    } else if (data && data.length > 0) {
-      seleccionarReserva(data[0], uid)
+    } else if (mantenerActiva) {
+      setReservaActiva(prev => {
+        if (!prev) return prev
+        const actualizada = filas.find(r => r.id === prev.id)
+        return actualizada || prev
+      })
+    } else if (filas.length > 0) {
+      seleccionarReserva(filas[0], uid)
     }
   }
 
@@ -94,6 +116,30 @@ function MensajesContenido() {
     setEnviando(false)
   }
 
+  const responderReserva = async (nuevoEstado) => {
+    if (!reservaActiva || respondiendo) return
+    setRespondiendo(true)
+    const { error } = await supabase
+      .from('reservas')
+      .update({ estado: nuevoEstado })
+      .eq('id', reservaActiva.id)
+
+    if (error) {
+      alert(`Error: ${error.message}`)
+    } else {
+      if (nuevoEstado === 'aceptada') {
+        await supabase.rpc('decrementar_asientos', { viaje_id_param: reservaActiva.viaje_id })
+      }
+      await supabase.from('mensajes').insert({
+        reserva_id: reservaActiva.id,
+        sender_id: user.id,
+        texto: nuevoEstado === 'aceptada' ? 'Solicitud aceptada ✓' : 'Solicitud rechazada',
+      })
+      fetchConversaciones(user.id, true)
+    }
+    setRespondiendo(false)
+  }
+
   const formatHora = (ts) => {
     const d = new Date(ts)
     return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
@@ -106,6 +152,20 @@ function MensajesContenido() {
     if (d.toDateString() === hoy.toDateString()) return 'Hoy'
     if (d.toDateString() === ayer.toDateString()) return 'Ayer'
     return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+  }
+
+  const estadoBadge = (estado) => {
+    const estilos = {
+      pendiente: { bg: 'rgba(234,179,8,0.12)', color: '#854d0e', label: 'Pendiente' },
+      aceptada:  { bg: 'rgba(46,139,87,0.1)',  color: 'var(--trust)', label: 'Aceptada' },
+      rechazada: { bg: 'rgba(220,38,38,0.08)', color: '#b91c1c', label: 'Rechazada' },
+    }
+    const e = estilos[estado] || estilos.pendiente
+    return (
+      <span style={{ fontSize: '10.5px', fontWeight: 600, background: e.bg, color: e.color, padding: '2px 8px', borderRadius: '20px', flexShrink: 0 }}>
+        {e.label}
+      </span>
+    )
   }
 
   if (loading) return (
@@ -125,7 +185,7 @@ function MensajesContenido() {
             Todavía no tenés conversaciones activas
           </p>
           <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0 0 28px' }}>
-            Los mensajes se habilitan cuando el conductor acepta tu reserva.
+            El chat se abre apenas enviás o recibís una solicitud de reserva.
           </p>
           <Link href="/buscar" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-flex' }}>
             Buscar viajes
@@ -140,10 +200,9 @@ function MensajesContenido() {
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {reservas.map(r => {
-                const esConduc = r.viaje?.conductor?.conductor?.id === user?.id
-                const otroNombre = esConduc
+                const otroNombre = r._esConductor
                   ? r.pasajero?.nombre || 'Pasajero'
-                  : r.viaje?.conductor?.conductor?.nombre || 'Conductor'
+                  : r.viaje?.conductor?.nombre || 'Conductor'
                 const activa = reservaActiva?.id === r.id
                 return (
                   <button key={r.id} onClick={() => seleccionarReserva(r, user.id)}
@@ -154,7 +213,10 @@ function MensajesContenido() {
                       borderLeft: activa ? '3px solid var(--navy)' : '3px solid transparent',
                       transition: 'all 0.1s'
                     }}>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dark)', margin: '0 0 3px' }}>{otroNombre}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '3px' }}>
+                      <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dark)', margin: 0 }}>{otroNombre}</p>
+                      {estadoBadge(r.estado)}
+                    </div>
                     <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 2px' }}>
                       {r.viaje?.origen} → {r.viaje?.destino}
                     </p>
@@ -172,12 +234,35 @@ function MensajesContenido() {
             <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {/* Header del chat */}
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface)' }}>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dark)', margin: '0 0 2px' }}>
-                  {reservaActiva.viaje?.origen} → {reservaActiva.viaje?.destino}
-                </p>
-                <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0 }}>
-                  {reservaActiva.viaje?.fecha} · {reservaActiva.viaje?.hora_salida?.slice(0, 5)}
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                  <div>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dark)', margin: '0 0 2px' }}>
+                      {reservaActiva.viaje?.origen} → {reservaActiva.viaje?.destino}
+                    </p>
+                    <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0 }}>
+                      {reservaActiva.viaje?.fecha} · {reservaActiva.viaje?.hora_salida?.slice(0, 5)} · {reservaActiva.asientos} asiento{reservaActiva.asientos !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  {estadoBadge(reservaActiva.estado)}
+                </div>
+
+                {reservaActiva._esConductor && reservaActiva.estado === 'pendiente' && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <button
+                      onClick={() => responderReserva('rechazada')}
+                      disabled={respondiendo}
+                      style={{ flex: 1, padding: '8px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: '1px solid var(--border-md)', background: 'transparent', color: '#b91c1c', cursor: 'pointer', opacity: respondiendo ? 0.5 : 1 }}>
+                      Rechazar
+                    </button>
+                    <button
+                      onClick={() => responderReserva('aceptada')}
+                      disabled={respondiendo}
+                      className="btn-primary"
+                      style={{ flex: 1, padding: '8px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', opacity: respondiendo ? 0.5 : 1 }}>
+                      Aceptar solicitud
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Mensajes */}

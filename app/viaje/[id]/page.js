@@ -11,10 +11,10 @@ export default function ViajeDetallePage() {
   const [viaje, setViaje] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [paso, setPaso] = useState('pago')
-  const [pagando, setPagando] = useState(false)
+  const [enviando, setEnviando] = useState(false)
   const [yaReservo, setYaReservo] = useState(false)
   const [asientosReserva, setAsientosReserva] = useState(1)
+  const [mensajeInicial, setMensajeInicial] = useState('')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -50,34 +50,40 @@ export default function ViajeDetallePage() {
     if (!user) { router.push('/auth/login'); return }
     if (viaje.conductor?.id === user.id) return
     setShowModal(true)
-    setPaso('pago')
   }
 
-  const handlePagar = async () => {
-    setPagando(true)
+  const handleEnviarSolicitud = async () => {
+    setEnviando(true)
     try {
-      const res = await fetch('/api/crear-preferencia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          viajeId: viaje.id,
-          origen: viaje.origen,
-          destino: viaje.destino,
-          precio: viaje.precio,
+      const { data: reserva, error } = await supabase
+        .from('reservas')
+        .insert({
+          viaje_id: viaje.id,
+          pasajero_id: user.id,
+          estado: 'pendiente',
           asientos: asientosReserva,
-          pasajeroId: user.id,
         })
-      })
-      const data = await res.json()
-      if (data.sandbox_init_point) {
-        window.location.href = data.sandbox_init_point
-      } else {
-        alert('Error al crear el pago: ' + (data.error || 'intenta de nuevo'))
-        setPagando(false)
+        .select('id')
+        .single()
+
+      if (error) {
+        alert('Error al enviar la solicitud: ' + error.message)
+        setEnviando(false)
+        return
       }
+
+      if (mensajeInicial.trim()) {
+        await supabase.from('mensajes').insert({
+          reserva_id: reserva.id,
+          sender_id: user.id,
+          texto: mensajeInicial.trim(),
+        })
+      }
+
+      router.push(`/mensajes?reserva=${reserva.id}`)
     } catch (err) {
       alert('Error: ' + err.message)
-      setPagando(false)
+      setEnviando(false)
     }
   }
 
@@ -197,7 +203,7 @@ export default function ViajeDetallePage() {
         ) : viaje.asientos_disponibles > 0 ? (
           <button onClick={handleReservar} className="btn-primary"
             style={{ width: '100%', padding: '16px', fontSize: '16px', borderRadius: '12px', fontWeight: 600 }}>
-            Reservar lugar — ${Number(viaje.precio).toLocaleString('es-AR')}
+            Solicitar reserva — ${Number(viaje.precio).toLocaleString('es-AR')}
           </button>
         ) : (
           <button disabled className="btn-primary"
@@ -208,77 +214,57 @@ export default function ViajeDetallePage() {
       )}
 
       {showModal && (
-        <div onClick={(e) => { if (e.target === e.currentTarget && !pagando) setShowModal(false) }}
+        <div onClick={(e) => { if (e.target === e.currentTarget && !enviando) setShowModal(false) }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '480px', padding: '32px 28px 40px', boxShadow: '0 -8px 40px rgba(0,0,0,0.15)' }}>
-            {paso === 'pago' ? (
-              <>
-                <div style={{ width: '36px', height: '4px', background: 'var(--border-md)', borderRadius: '2px', margin: '0 auto 28px' }} />
-                <p style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 24px' }}>Confirmá tu reserva</p>
-                <div style={{ background: 'rgba(29,53,87,0.04)', borderRadius: '12px', padding: '16px 20px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Ruta</span>
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dark)' }}>{viaje.origen} → {viaje.destino}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Fecha</span>
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dark)' }}>{formatFecha(viaje.fecha)} · {viaje.hora_salida?.slice(0,5)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Conductor</span>
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dark)' }}>{viaje.conductor?.nombre}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Asientos</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <button type="button" onClick={() => setAsientosReserva(a => Math.max(1, a - 1))}
-                        style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--border-md)', background: 'transparent', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                      <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dark)', minWidth: '16px', textAlign: 'center' }}>{asientosReserva}</span>
-                      <button type="button" onClick={() => setAsientosReserva(a => Math.min(viaje.asientos_disponibles, a + 1))}
-                        style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--border-md)', background: 'transparent', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                    </div>
-                  </div>
-                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dark)' }}>Total</span>
-                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--dark)' }}>${(Number(viaje.precio) * asientosReserva).toLocaleString('es-AR')}</span>
-                  </div>
-                </div>
-                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px' }}>Método de pago</p>
-                <div style={{ border: '2px solid var(--navy)', borderRadius: '12px', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', background: 'rgba(29,53,87,0.03)' }}>
-                  <div style={{ width: '32px', height: '32px', background: '#009ee3', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>&#128179;</div>
-                  <div>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dark)', margin: 0 }}>Mercado Pago</p>
-                    <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0 }}>Tarjeta, transferencia o saldo</p>
-                  </div>
-                  <div style={{ marginLeft: 'auto', width: '18px', height: '18px', borderRadius: '50%', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fff' }} />
-                  </div>
-                </div>
-                <button onClick={handlePagar} disabled={pagando} className="btn-primary"
-                  style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', fontWeight: 600, opacity: pagando ? 0.7 : 1 }}>
-                  {pagando ? 'Procesando...' : 'Pagar $' + (Number(viaje.precio) * asientosReserva).toLocaleString('es-AR')}
-                </button>
-                <p style={{ fontSize: '12px', color: 'var(--subtle)', textAlign: 'center', margin: '12px 0 0' }}>
-                  La reserva queda pendiente hasta que el conductor confirme.
-                </p>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '16px 0 8px' }}>
-                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(46,139,87,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '28px' }}>&#10003;</div>
-                <p style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px' }}>¡Reserva enviada!</p>
-                <p style={{ fontSize: '14px', color: 'var(--muted)', margin: '0 0 28px', lineHeight: 1.6 }}>
-                  El conductor tiene que aceptar tu reserva.<br />Te avisamos cuando lo haga.
-                </p>
-                <button onClick={() => { setShowModal(false); router.push('/mis-viajes') }}
-                  className="btn-primary" style={{ width: '100%', padding: '14px', fontSize: '15px', borderRadius: '12px' }}>
-                  Ver mis viajes
-                </button>
-                <button onClick={() => setShowModal(false)}
-                  className="btn-ghost" style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px', marginTop: '8px' }}>
-                  Volver al viaje
-                </button>
+            <div style={{ width: '36px', height: '4px', background: 'var(--border-md)', borderRadius: '2px', margin: '0 auto 28px' }} />
+            <p style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 24px' }}>Enviar solicitud de reserva</p>
+            <div style={{ background: 'rgba(29,53,87,0.04)', borderRadius: '12px', padding: '16px 20px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Ruta</span>
+                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dark)' }}>{viaje.origen} → {viaje.destino}</span>
               </div>
-            )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Fecha</span>
+                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dark)' }}>{formatFecha(viaje.fecha)} · {viaje.hora_salida?.slice(0,5)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Conductor</span>
+                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dark)' }}>{viaje.conductor?.nombre}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '14px', color: 'var(--muted)' }}>Asientos</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button type="button" onClick={() => setAsientosReserva(a => Math.max(1, a - 1))}
+                    style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--border-md)', background: 'transparent', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                  <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dark)', minWidth: '16px', textAlign: 'center' }}>{asientosReserva}</span>
+                  <button type="button" onClick={() => setAsientosReserva(a => Math.min(viaje.asientos_disponibles, a + 1))}
+                    style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid var(--border-md)', background: 'transparent', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                </div>
+              </div>
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dark)' }}>Total</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--dark)' }}>${(Number(viaje.precio) * asientosReserva).toLocaleString('es-AR')}</span>
+              </div>
+            </div>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px' }}>Mensaje para el conductor (opcional)</p>
+            <textarea
+              value={mensajeInicial}
+              onChange={e => setMensajeInicial(e.target.value)}
+              placeholder="Ej: Hola, ¿podemos coordinar el punto de encuentro?"
+              rows={3}
+              className="input-field"
+              style={{ width: '100%', resize: 'none', marginBottom: '16px', fontFamily: 'inherit' }}
+            />
+            <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: '10px', padding: '12px 14px', marginBottom: '20px' }}>
+              <p style={{ fontSize: '12.5px', color: '#854d0e', margin: 0, lineHeight: 1.5 }}>
+                Esto es una solicitud, no una reserva confirmada. El conductor la tiene que aceptar. El pago del viaje se acuerda directamente entre ustedes — la plataforma solo los conecta.
+              </p>
+            </div>
+            <button onClick={handleEnviarSolicitud} disabled={enviando} className="btn-primary"
+              style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', fontWeight: 600, opacity: enviando ? 0.7 : 1 }}>
+              {enviando ? 'Enviando...' : 'Enviar solicitud de reserva'}
+            </button>
           </div>
         </div>
       )}

@@ -169,6 +169,10 @@ export default function MisViajesPage() {
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                            <Link href={`/mensajes?reserva=${reserva.id}`}
+                              style={{ padding: '7px 12px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: '1px solid var(--border-md)', background: 'transparent', color: 'var(--navy)', textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+                              💬 Chat
+                            </Link>
                             <button
                               onClick={() => responderReserva(reserva.id, 'rechazada', user.id, viaje.id)}
                               disabled={accionando === reserva.id}
@@ -215,7 +219,15 @@ export default function MisViajesPage() {
                     ${Number(reserva.viaje?.precio).toLocaleString('es-AR')}
                   </p>
                 </div>
-                {estadoBadge(reserva.estado)}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                  {estadoBadge(reserva.estado)}
+                  {reserva.estado !== 'rechazada' && (
+                    <Link href={`/mensajes?reserva=${reserva.id}`}
+                      style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--navy)', textDecoration: 'none' }}>
+                      💬 Chatear
+                    </Link>
+                  )}
+                </div>
               </div>
             ))}
           </div>
