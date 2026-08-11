@@ -39,7 +39,7 @@ export default function MisViajesPage() {
     const [{ data: viajes }, { data: reservasPasajero }] = await Promise.all([
       supabase
         .from('viajes')
-        .select('*, reservas(id, estado, pasajero:profiles!reservas_pasajero_id_fkey(nombre, rating))')
+        .select('*, reservas(id, estado, asientos, pasajero:profiles!reservas_pasajero_id_fkey(nombre, rating))')
         .eq('conductor_id', uid)
         .order('fecha', { ascending: false }),
       supabase
@@ -54,7 +54,7 @@ export default function MisViajesPage() {
     setLoading(false)
   }
 
-  const responderReserva = async (reservaId, nuevoEstado, uid, viajeId) => {
+  const responderReserva = async (reservaId, nuevoEstado, uid, viajeId, asientosReserva) => {
     setAccionando(reservaId)
     const { error } = await supabase
       .from('reservas')
@@ -63,9 +63,9 @@ export default function MisViajesPage() {
     if (error) {
       alert(`Error: ${error.message}`)
     } else {
-      // Si acepta, decrementar asientos disponibles
+      // Si acepta, decrementar la cantidad de asientos que pidió esta reserva (no siempre 1)
       if (nuevoEstado === 'aceptada') {
-        await supabase.rpc('decrementar_asientos', { viaje_id_param: viajeId })
+        await supabase.rpc('decrementar_asientos', { viaje_id_param: viajeId, asientos_param: asientosReserva || 1 })
       }
       fetchTodo(uid, false)
     }
@@ -174,13 +174,13 @@ export default function MisViajesPage() {
                               💬 Chat
                             </Link>
                             <button
-                              onClick={() => responderReserva(reserva.id, 'rechazada', user.id, viaje.id)}
+                              onClick={() => responderReserva(reserva.id, 'rechazada', user.id, viaje.id, reserva.asientos)}
                               disabled={accionando === reserva.id}
                               style={{ padding: '7px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', border: '1px solid var(--border-md)', background: 'transparent', color: '#b91c1c', cursor: 'pointer', opacity: accionando === reserva.id ? 0.5 : 1 }}>
                               Rechazar
                             </button>
                             <button
-                              onClick={() => responderReserva(reserva.id, 'aceptada', user.id, viaje.id)}
+                              onClick={() => responderReserva(reserva.id, 'aceptada', user.id, viaje.id, reserva.asientos)}
                               disabled={accionando === reserva.id}
                               className="btn-primary"
                               style={{ padding: '7px 14px', fontSize: '13px', fontWeight: 600, borderRadius: '8px', opacity: accionando === reserva.id ? 0.5 : 1 }}>

@@ -1,9 +1,11 @@
 import Link from 'next/link'
 
 export default function TripCard({ trip }) {
+  const sinLugares = trip.asientos_disponibles <= 0
+
   return (
     <Link href={`/viaje/${trip.id}`} style={{ textDecoration: 'none' }}>
-      <div className="card-hover" style={{ padding: '24px' }}>
+      <div className="card-hover" style={{ padding: '24px', opacity: sinLugares ? 0.55 : 1, filter: sinLugares ? 'grayscale(0.6)' : 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
 
           {/* Ruta */}
@@ -11,7 +13,7 @@ export default function TripCard({ trip }) {
             <div style={{ display: 'flex', alignItems: 'stretch', gap: '16px' }}>
               {/* Línea de ruta */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '4px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--navy)', flexShrink: 0 }} />
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: sinLugares ? 'var(--subtle)' : 'var(--navy)', flexShrink: 0 }} />
                 <div style={{ width: '1px', flex: 1, background: 'var(--border-md)', margin: '6px 0' }} />
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid var(--border-md)', background: 'var(--surface)', flexShrink: 0 }} />
               </div>
@@ -36,9 +38,15 @@ export default function TripCard({ trip }) {
               ${Number(trip.precio).toLocaleString('es-AR')}
             </p>
             <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0' }}>por persona</p>
-            <p style={{ fontSize: '12px', color: 'var(--subtle)', margin: '6px 0 0' }}>
-              {trip.asientos_disponibles} {trip.asientos_disponibles === 1 ? 'lugar disponible' : 'lugares disponibles'}
-            </p>
+            {sinLugares ? (
+              <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, color: '#6b7280', background: 'rgba(107,114,128,0.12)', padding: '3px 10px', borderRadius: '20px', marginTop: '6px' }}>
+                Sin lugares
+              </span>
+            ) : (
+              <p style={{ fontSize: '12px', color: 'var(--subtle)', margin: '6px 0 0' }}>
+                {trip.asientos_disponibles} {trip.asientos_disponibles === 1 ? 'lugar disponible' : 'lugares disponibles'}
+              </p>
+            )}
           </div>
         </div>
 

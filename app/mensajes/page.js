@@ -128,7 +128,7 @@ function MensajesContenido() {
       alert(`Error: ${error.message}`)
     } else {
       if (nuevoEstado === 'aceptada') {
-        await supabase.rpc('decrementar_asientos', { viaje_id_param: reservaActiva.viaje_id })
+        await supabase.rpc('decrementar_asientos', { viaje_id_param: reservaActiva.viaje_id, asientos_param: reservaActiva.asientos || 1 })
       }
       await supabase.from('mensajes').insert({
         reserva_id: reservaActiva.id,
